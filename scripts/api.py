@@ -1,3 +1,5 @@
+import base64
+import io
 import os
 from fastapi import FastAPI, Body
 from pydantic import BaseModel
@@ -7,7 +9,7 @@ from PIL import Image
 import numpy as np
 
 from modules.api.api import encode_pil_to_base64, decode_base64_to_image
-from scripts.sam import sam_predict, dino_predict, update_mask, cnet_seg, categorical_mask
+from scripts.sam import sam_predict, get_sam_embedding, get_sam_masks, dino_predict, update_mask, cnet_seg, categorical_mask
 from scripts.sam import sam_model_list
 
 
@@ -36,10 +38,10 @@ def encode_to_base64(image):
         Exception("Invalid type")
 
 
-def sam_api(_: gr.Blocks, app: FastAPI):    
+def sam_api(_: gr.Blocks, app: FastAPI):
     @app.get("/sam/heartbeat")
     async def heartbeat():
-        return {            
+        return {
             "msg": "Success!"
         }
 
@@ -84,6 +86,47 @@ def sam_api(_: gr.Blocks, app: FastAPI):
             result["masked_images"] = list(map(encode_to_base64, sam_output_mask_gallery[6:]))
         return result
 
+    class SamGetEmbeddingRequest(BaseModel):
+        sam_model_name: str = "sam_vit_h_4b8939.pth"
+        input_image: str
+
+    @app.post("/sam/get-embedding")
+    async def api_sam_get_embedding(payload: SamGetEmbeddingRequest = Body(...)) -> Any:
+        print(f"SAM API /sam/get-embedding received request")
+        payload.input_image = decode_to_pil(payload.input_image).convert('RGBA')
+        embedding, sam_message = get_sam_embedding(
+            payload.sam_model_name,
+            payload.input_image)
+        print(f"SAM API /sam/get-embedding finished with message: {sam_message}")
+        result = {
+            "msg": sam_message,
+        }
+        mem = io.BytesIO()
+        np.save(mem, embedding)
+        # embedding
+        result['embedding'] = base64.b64encode(mem.getvalue()).decode()
+        return result
+
+    class SamSegMasksRequest(BaseModel):
+        sam_model_name: str = "sam_vit_h_4b8939.pth"
+        input_image: str
+        compress: bool = True
+
+    @app.post("/sam/seg-masks")
+    async def api_sam_seg_masks(payload: SamSegMasksRequest = Body(...)) -> Any:
+        print(f"SAM API /sam/seg-masks received request")
+        payload.input_image = decode_to_pil(payload.input_image).convert('RGBA')
+        masks, sam_message = get_sam_masks(
+            payload.sam_model_name,
+            payload.input_image, payload.compress)
+        print(f"SAM API /sam/get-embedding finished with message: {sam_message}")
+        result = {
+            "msg": sam_message,
+        }
+        # embedding
+        result['masks'] = masks
+        return result
+
     class DINOPredictRequest(BaseModel):
         input_image: str
         dino_model_name: str = "GroundingDINO_SwinT_OGC (694MB)"
@@ -123,7 +166,7 @@ def sam_api(_: gr.Blocks, app: FastAPI):
         print(f"SAM API /sam/dilate-mask finished")
         return {"blended_image": dilate_result[0], "mask": dilate_result[1], "masked_image": dilate_result[2]}
 
-    
+
     class AutoSAMConfig(BaseModel):
         points_per_side: Optional[int] = 32
         points_per_batch: int = 64
@@ -187,7 +230,7 @@ def sam_api(_: gr.Blocks, app: FastAPI):
             result["blended_presam"]    = cnet_seg_img[2]
             result["blended_postsam"]   = cnet_seg_img[3]
         return result
-    
+
     class CategoryMaskRequest(BaseModel):
         sam_model_name: str = "sam_vit_h_4b8939.pth"
         processor: str = "seg_ofade20k"
@@ -198,7 +241,7 @@ def sam_api(_: gr.Blocks, app: FastAPI):
         target_H: Optional[int] = None
         category: str
         input_image: str
-    
+
     @app.post("/sam/category-mask")
     async def api_category_mask(payload: CategoryMaskRequest = Body(...),
                                 autosam_conf: AutoSAMConfig = Body(...)) -> Any:
