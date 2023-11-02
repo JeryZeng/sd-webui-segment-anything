@@ -111,6 +111,7 @@ def sam_api(_: gr.Blocks, app: FastAPI):
         sam_model_name: str = "sam_vit_h_4b8939.pth"
         input_image: str
         compress: bool = True
+        min_area: int = 100
 
     @app.post("/sam/seg-masks")
     async def api_sam_seg_masks(payload: SamSegMasksRequest = Body(...)) -> Any:
@@ -118,7 +119,9 @@ def sam_api(_: gr.Blocks, app: FastAPI):
         payload.input_image = decode_to_pil(payload.input_image).convert('RGBA')
         masks, sam_message = get_sam_masks(
             payload.sam_model_name,
-            payload.input_image, payload.compress)
+            payload.input_image,
+            payload.compress,
+            min_area=payload.min_area)
         print(f"SAM API /sam/get-embedding finished with message: {sam_message}")
         result = {
             "msg": sam_message,

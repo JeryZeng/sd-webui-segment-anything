@@ -256,7 +256,7 @@ def get_sam_embedding(sam_model_name, input_image: Image) -> (np.ndarray, str):
     return embedding, 'ok'
 
 
-def get_sam_masks(sam_model_name, input_image: Image, compress: bool) -> (np.ndarray, str):
+def get_sam_masks(sam_model_name, input_image: Image, compress: bool, min_area=100) -> (np.ndarray, str):
     print("Start SAM Processing")
     if sam_model_name is None:
         return None, "SAM model not found. Please download SAM model from extension README."
@@ -266,7 +266,7 @@ def get_sam_masks(sam_model_name, input_image: Image, compress: bool) -> (np.nda
     image_np_rgb = image_np[..., :3]
     sam = init_sam_model(sam_model_name)
 
-    mask_generator = SamAutomaticMaskGenerator(sam)
+    mask_generator = SamAutomaticMaskGenerator(sam, min_mask_region_area=min_area)
 
     with torch.no_grad():
         masks: [] = mask_generator.generate(image_np_rgb)
