@@ -300,7 +300,7 @@ def get_sam_masks(sam_model_name, input_image: Image, compress: bool) -> (np.nda
                 last_count = 0
                 col_start_index = int(start_indices[row_index])
 
-                for col_index in range(col_start_index, w - col_start_index):
+                for col_index in range(col_start_index, w):
                     if ann[row_index, col_index] == 0:
                         valid_point = False
                         if last_count > 0:
