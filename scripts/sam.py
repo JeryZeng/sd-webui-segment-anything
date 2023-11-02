@@ -290,7 +290,7 @@ def get_sam_masks(sam_model_name, input_image: Image, compress: bool) -> (np.nda
             mask = []
             start_indices = np.argmax(ann, 1)
             none_zero_counts = np.count_nonzero(ann, 1)
-            for row_index in range(ann.size(0)):
+            for row_index in range(h):
                 valid_point = False
                 row = []
                 row_none_zero_count = int(none_zero_counts[row_index])
