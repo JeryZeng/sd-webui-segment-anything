@@ -270,7 +270,7 @@ def get_sam_masks(sam_model_name, input_image: Image, compress: bool) -> (np.nda
     if len(masks) == 0:
         return []
     garbage_collect(sam)
-    h, w, = image_np_rgb.shape
+    h, w, _ = image_np_rgb.shape
     def convert_ann2struct(ann, box: [], area):
         ann = ann.astype(np.uint8)
         # box = box.astype(np.uint32)
