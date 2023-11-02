@@ -1,26 +1,28 @@
-import gc
-import os
 import copy
+import gc
 import glob
-import numpy as np
-from PIL import Image
-import torch
-import gradio as gr
+import os
 from collections import OrderedDict
-from scipy.ndimage import binary_dilation
+
+import gradio as gr
+import numpy as np
+import torch
+from PIL import Image
 from modules import scripts, shared, script_callbacks
-from modules.ui import gr_show
-from modules.ui_components import FormRow
-from modules.safe import unsafe_torch_load, load
-from modules.processing import StableDiffusionProcessingImg2Img, StableDiffusionProcessing
 from modules.devices import device, torch_gc, cpu
 from modules.paths import models_path
-from sam_hq.predictor import SamPredictorHQ
-from sam_hq.build_sam_hq import sam_model_registry
-from scripts.dino import dino_model_list, dino_predict_internal, show_boxes, clear_dino_cache, dino_install_issue_text
-from scripts.auto import clear_sem_sam_cache, register_auto_sam, semantic_segmentation, sem_sam_garbage_collect, image_layer_internal, categorical_mask_image
-from scripts.process_params import SAMProcessUnit, max_cn_num
+from modules.processing import StableDiffusionProcessingImg2Img, StableDiffusionProcessing
+from modules.safe import unsafe_torch_load, load
+from modules.ui import gr_show
+from modules.ui_components import FormRow
+from scipy.ndimage import binary_dilation
 from segment_anything import SamAutomaticMaskGenerator
+
+from sam_hq.build_sam_hq import sam_model_registry
+from sam_hq.predictor import SamPredictorHQ
+from scripts.auto import clear_sem_sam_cache, register_auto_sam, semantic_segmentation, sem_sam_garbage_collect, image_layer_internal, categorical_mask_image
+from scripts.dino import dino_model_list, dino_predict_internal, show_boxes, clear_dino_cache, dino_install_issue_text
+from scripts.process_params import SAMProcessUnit, max_cn_num
 
 refresh_symbol = '\U0001f504'  # 🔄
 sam_model_cache = OrderedDict()
@@ -253,6 +255,7 @@ def get_sam_embedding(sam_model_name, input_image: Image) -> (np.ndarray, str):
     garbage_collect(sam)
     return embedding, 'ok'
 
+
 def get_sam_masks(sam_model_name, input_image: Image, compress: bool) -> (np.ndarray, str):
     print("Start SAM Processing")
     if sam_model_name is None:
@@ -271,32 +274,49 @@ def get_sam_masks(sam_model_name, input_image: Image, compress: bool) -> (np.nda
         return []
     garbage_collect(sam)
     h, w, _ = image_np_rgb.shape
+
     def convert_ann2struct(ann, box: [], area):
-        ann = ann.astype(np.uint8)
         # box = box.astype(np.uint32)
         # 去掉尾部多余的
         nonlocal h, w
         ann = np.delete(ann, np.arange(box[0] + box[2], w), 1)
         ann = np.delete(ann, np.arange(box[1] + box[3], h), 0)
         # 去掉头部多余的
-        ann = np.delete(ann, np.arange(0, int(box[0]) + 1), 1)
-        ann = np.delete(ann, np.arange(0, int(box[1]) + 1), 0)
+        ann = np.delete(ann, np.arange(0, box[0] + 1), 1)
+        ann = np.delete(ann, np.arange(0, box[1] + 1), 0)
+        ann = ann.astype(np.uint8)
         # 压缩标注
         if compress:
             mask = []
-            for h in range(ann.shape[0]):
+            start_indices = np.argmax(ann, 1)
+            none_zero_counts = np.count_nonzero(ann, 1)
+            for row_index in range(ann.size(0)):
                 valid_point = False
                 row = []
-                for w in range(ann.shape[1]):
-                    if ann[h, w] > 0:
-                        if valid_point:
-                            row[len(row) - 1] += 1
-                        else:
-                            row.append(w)
-                            row.append(1)
-                            valid_point = True
-                    else:
+                row_none_zero_count = int(none_zero_counts[row_index])
+                if row_none_zero_count == 0:
+                    mask.append(row)
+                    continue
+                last_count = 0
+                col_start_index = int(start_indices[row_index])
+
+                for col_index in range(col_start_index, w - col_start_index):
+                    if ann[row_index, col_index] == 0:
                         valid_point = False
+                        if last_count > 0:
+                            row.append(last_count)
+                            last_count = 0
+                        continue
+                    if valid_point:
+                        last_count += 1
+                        if last_count >= row_none_zero_count:
+                            break
+                    else:
+                        row.append(col_index)
+                        last_count = 1
+                        valid_point = True
+                if last_count > 0:
+                    row.append(last_count)
                 mask.append(row)
         else:
             mask = ann.tolist()
@@ -308,6 +328,7 @@ def get_sam_masks(sam_model_name, input_image: Image, compress: bool) -> (np.nda
             'box': box,
             'area': area
         }
+
     masks.sort(key=lambda x: x['area'], reverse=True)
     masks = [convert_ann2struct(mask['segmentation'], mask['bbox'], mask['area']) for mask in masks]
     garbage_collect(sam)
