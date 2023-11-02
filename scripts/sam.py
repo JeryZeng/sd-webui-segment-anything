@@ -117,7 +117,7 @@ def refresh_sam_models(*inputs):
 
 
 def init_sam_model(sam_model_name):
-    print(f"Initializing SAM to {sam_device}")
+    print(f"Initializing SAM to {sam_device}，model list: ", sam_model_list)
     if sam_model_name in sam_model_cache:
         sam = sam_model_cache[sam_model_name]
         if shared.cmd_opts.lowvram or (str(sam_device) not in str(sam.device)):
