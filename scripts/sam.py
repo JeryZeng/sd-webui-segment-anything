@@ -279,17 +279,19 @@ def get_sam_masks(sam_model_name, input_image: Image, compress: bool, min_area=1
         # box = box.astype(np.uint32)
         # 去掉尾部多余的
         nonlocal h, w
-        box_end_x = box[0] + box[2]
-        box_end_y = box[1] + box[3]
+        box_end_x = int(box[0] + box[2])
+        box_end_y = int(box[1] + box[3])
         if box_end_x < w - 1:
             ann = np.delete(ann, np.arange(box_end_x, w), 1)
         if box_end_y < h - 1:
-            ann = np.delete(ann, np.arange(box[1] + box[3], h), 0)
+            ann = np.delete(ann, np.arange(box_end_y, h), 0)
         # 去掉头部多余的
-        if box[0] > 0:
-            ann = np.delete(ann, np.arange(0, box[0] + 1), 1)
-        if box[1] > 0:
-            ann = np.delete(ann, np.arange(0, box[1] + 1), 0)
+        box_x = int(box[0])
+        box_y = int(box[1])
+        if box_x > 0:
+            ann = np.delete(ann, np.arange(0, box_x + 1), 1)
+        if box_y > 0:
+            ann = np.delete(ann, np.arange(0, box_y + 1), 0)
         ann = ann.astype(np.uint8)
         # 压缩标注
         if compress:
